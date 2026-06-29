@@ -1866,6 +1866,118 @@ impl McpServer {
                     }
                 }
 
+                // Gate 6: cursor-pin-coverage.md — counts ✅/❌/🔁/🚨 in verdict rows.
+                {
+                    let path = ratchet_dir.join("cursor-pin-coverage.md");
+                    if path.exists() {
+                        let content = std::fs::read_to_string(&path).unwrap_or_default();
+                        // Verdict rows are markdown table cells. Count emoji frequency
+                        // across the entire file since each section ends with a
+                        // "**Coverage verdict** | <emoji> ..." row.
+                        let alarms = content.matches("🚨").count() + content.matches("❌").count();
+                        let covered = content.matches("✅ aligned").count() + content.matches("✅").count();
+                        gates.push(json!({
+                            "gate": "cursor_pins",
+                            "status": if alarms == 0 { "✅" } else { "⚠️" },
+                            "covered": covered, "gaps": alarms,
+                            "report": "cursor-pin-coverage.md",
+                        }));
+                    } else {
+                        gates.push(json!({
+                            "gate": "cursor_pins", "status": "⚠️",
+                            "note": "cursor-pin-coverage.md not generated. Run: make -C refs/api-references ratchets",
+                        }));
+                    }
+                }
+
+                // Gate 7: plumbing-integrity-ratchet.json — JSON-first, count
+                // 🚨 alarms across knob_verdicts + constructor_contract + layer_4b_contract.
+                {
+                    let path = ratchet_dir.join("plumbing-integrity-ratchet.json");
+                    if path.exists() {
+                        let content = std::fs::read_to_string(&path).unwrap_or_default();
+                        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or(json!({}));
+                        let mut alarms = 0usize;
+                        let mut covered = 0usize;
+                        if let Some(verdicts) = parsed.get("knob_verdicts").and_then(|v| v.as_array()) {
+                            for v in verdicts {
+                                if let Some(flags) = v.get("flags").and_then(|f| f.as_array()) {
+                                    for f in flags {
+                                        let s = f.as_str().unwrap_or("");
+                                        if s.contains("🚨") { alarms += 1; }
+                                        if s.contains("✅") { covered += 1; }
+                                    }
+                                }
+                            }
+                        }
+                        for key in ["constructor_contract", "layer_4b_contract"] {
+                            if let Some(c) = parsed.get(key).and_then(|c| c.get("flags")).and_then(|f| f.as_array()) {
+                                for f in c {
+                                    let s = f.as_str().unwrap_or("");
+                                    if s.contains("🚨") { alarms += 1; }
+                                    if s.contains("✅") { covered += 1; }
+                                }
+                            }
+                        }
+                        // Layer-4b coverage detail (the headline number for sortie-27)
+                        let layer_4b_uncovered = parsed
+                            .get("layer_4b_contract")
+                            .and_then(|c| c.get("uncovered"))
+                            .and_then(|u| u.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        gates.push(json!({
+                            "gate": "plumbing_integrity",
+                            "status": if alarms == 0 { "✅" } else { "⚠️" },
+                            "covered": covered, "gaps": alarms,
+                            "layer_4b_uncovered": layer_4b_uncovered,
+                            "report": "plumbing-integrity-ratchet.md",
+                        }));
+                    } else {
+                        gates.push(json!({
+                            "gate": "plumbing_integrity", "status": "⚠️",
+                            "note": "plumbing-integrity-ratchet.json not generated. Run: python3 refs/api-references/scripts/gen-plumbing-integrity-ratchet.py",
+                        }));
+                    }
+                }
+
+                // Gate 8: anthropic/models-recon.json — JSON manifest, count drift signals.
+                {
+                    let path = ratchet_dir.join("anthropic").join("models-recon.json");
+                    if path.exists() {
+                        let content = std::fs::read_to_string(&path).unwrap_or_default();
+                        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or(json!({}));
+                        let violations = parsed
+                            .get("spec_conformance")
+                            .and_then(|c| c.get("violations"))
+                            .and_then(|v| v.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        let rows = parsed
+                            .get("rows")
+                            .and_then(|r| r.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        let apex_known = parsed
+                            .get("rows")
+                            .and_then(|r| r.as_array())
+                            .map(|rows| rows.iter().filter(|r| r.get("apex").map(|a| !a.is_null()).unwrap_or(false)).count())
+                            .unwrap_or(0);
+                        gates.push(json!({
+                            "gate": "models_recon_anthropic",
+                            "status": if violations == 0 { "✅" } else { "⚠️" },
+                            "covered": apex_known, "gaps": violations,
+                            "total_rows": rows,
+                            "report": "anthropic/models-recon.md",
+                        }));
+                    } else {
+                        gates.push(json!({
+                            "gate": "models_recon_anthropic", "status": "⚠️",
+                            "note": "anthropic/models-recon.json not generated. Run: python3 refs/api-references/scripts/gen-model-page-anthropic.py",
+                        }));
+                    }
+                }
+
                 Ok(json!({ "action": "status", "gates": gates }))
             }
 
@@ -1942,14 +2054,20 @@ impl McpServer {
                     Some("litellm-params") => vec![("litellm_params", "litellm-transform-ratchet.md")],
                     Some("proxy-models") => vec![("proxy_models", "proxy-model-coverage.md")],
                     Some("test-titles") => vec![("test_titles", "test-title-coverage.md")],
+                    Some("cursor-pins") => vec![("cursor_pins", "cursor-pin-coverage.md")],
+                    Some("plumbing-integrity") => vec![("plumbing_integrity", "plumbing-integrity-ratchet.md")],
+                    Some("models-recon-anthropic") => vec![("models_recon_anthropic", "anthropic/models-recon.md")],
                     Some(other) => anyhow::bail!(
-                        "Unknown ratchet '{}'. Valid: sdk-types, litellm-params, proxy-models, test-titles", other
+                        "Unknown ratchet '{}'. Valid: sdk-types, litellm-params, proxy-models, test-titles, cursor-pins, plumbing-integrity, models-recon-anthropic", other
                     ),
                     None => vec![
                         ("sdk_types", "sdk-type-coverage.md"),
                         ("litellm_params", "litellm-transform-ratchet.md"),
                         ("proxy_models", "proxy-model-coverage.md"),
                         ("test_titles", "test-title-coverage.md"),
+                        ("cursor_pins", "cursor-pin-coverage.md"),
+                        ("plumbing_integrity", "plumbing-integrity-ratchet.md"),
+                        ("models_recon_anthropic", "anthropic/models-recon.md"),
                     ],
                 };
 
