@@ -1346,15 +1346,26 @@ impl McpServer {
             // always live — the only conversions observed on real coding
             // nights (2026-06-12) were CLI invocations seconds after a deny.
             // Trigger phrases keep the literal questions first (routing memo).
+            // v0.74: invariance loop promoted to first-class guidance — the
+            // 8-gate dashboard is the single best move before bumping SDKs /
+            // changing wire types / adding settings knobs. Sortie-19/22/25/27
+            // landed those gates; they must be visible by default or harness
+            // agents will keep silently regressing the way sortie-24/26 did.
             const NOISY: &str = concat!(
-                "Code Graph MCP \u{2014} project indexed. Fastest path is the CLI via Bash (no tool loading): ",
-                "\"who calls X?\" \u{2192} `code-graph-mcp callgraph X`; \"impact of X?\" or before editing a fn \u{2192} `code-graph-mcp impact X`; ",
-                "module map \u{2192} `code-graph-mcp overview <dir>`; symbol source \u{2192} `code-graph-mcp show X`; text search with AST context \u{2192} `code-graph-mcp grep \"pat\" [paths]` (-F literal, -i, -w, -l, -C N; grep-compatible exits).\n",
-                "MCP tools (same data; load via ToolSearch): get_call_graph, get_ast_node include_impact=true, semantic_code_search for concept search without an exact symbol.\n",
-                "Repo-wide AST index (LSP only handles open files; we don't). Replaces multi-round Grep+Read for structural queries.\n",
-                "Still Grep for exact strings/regex; still Read files you will edit.\n",
-                "Diagnostics: `code-graph-mcp health-check`.\n",
-                "Full decision table: CLAUDE.md \u{2192} .claude/plugin_code_graph_mcp.md (run `code-graph-mcp adopt` if missing)."
+                "Code Graph MCP \u{2014} repo indexed (apex/xli/qwen/cli-ops spokes). Default to CLI via Bash (no tool-load cost):\n",
+                "  who calls X / impact / module map / source / grep:\n",
+                "    code-graph-mcp callgraph X | impact X | overview <dir> | show X | grep \"pat\" [paths]  (-F -i -w -l -C N; grep exits)\n",
+                "Harness invariance loop (drift surfaces here BEFORE prod):\n",
+                "  mcp__code-graph__invariance_check action=status  \u{2192} 8-gate dashboard\n",
+                "    type_audit | sdk_types | litellm_params | proxy_models | test_titles |\n",
+                "    cursor_pins | plumbing_integrity (Layer-4b + ctor + knobs) | models_recon_anthropic\n",
+                "  Use BEFORE bumping SDKs / changing wire types / adding settings knobs.\n",
+                "  action=ratchet name=<...> top=N \u{2192} gap-only detail; refresh=true regenerates first (~10s).\n",
+                "  action=audit \u{2192} live structural verification (when refactoring).\n",
+                "  Any \u{1f6a8} alarm = look in cli-ops sortie-board for the doctrine doc.\n",
+                "MCP tools (load via ToolSearch when CLI insufficient): get_call_graph, get_ast_node include_impact=true, semantic_code_search, invariance_check, list_skills/get_skill.\n",
+                "Use Grep for literal strings; Read for files you'll edit. We replace structural multi-round Grep+Read, not all reads.\n",
+                "Diagnostics: code-graph-mcp health-check. Full table: CLAUDE.md \u{2192} .claude/plugin_code_graph_mcp.md (`code-graph-mcp adopt` if missing)."
             );
             // Compile-time guard: calibrated from observed Claude Code truncation
             // at ~2048 bytes; 1500 leaves ~25% margin. Future edits that blow the

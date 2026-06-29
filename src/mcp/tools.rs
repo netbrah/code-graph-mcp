@@ -150,13 +150,13 @@ impl ToolRegistry {
             },
             ToolDefinition {
                 name: "invariance_check".into(),
-                description: "Cross-spoke invariance verification: type audit + 7 ratchets (sdk/litellm/proxy/test + cursor-pins + plumbing-integrity + models-recon-anthropic). Compact output. Use get_skill('invariance-tower') for full context.".into(),
+                description: "8-gate harness invariance dashboard for apex+xli+qwen+cli-ops. Run BEFORE: bumping SDKs, changing wire types, adding settings knobs, absorbing upstream changes. Gates: type_audit (23 expected types), sdk_types (Anthropic spec drift), litellm_params (wire-shaping params), proxy_models (alias canonicalization), test_titles, cursor_pins, plumbing_integrity (Layer-4b coverage + ctor contract + knob threading), models_recon_anthropic (litellm × apex × proxy reconciliation). Actions: status (fast read), ratchet name=<...> top=N (gap detail), audit (live structural verify), drift (diff vs snapshot). Compact JSON output. Skill: get_skill('invariance-tower').".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
-                        "action": { "type": "string", "enum": ["status", "audit", "ratchet", "drift"], "description": "status: read existing reports (fast). audit: LIVE — runs cgm-invariant-audit script against code-graph indexes. ratchet: read ratchet reports (add refresh=true to regenerate first). drift: LIVE — runs audit and compares against previous snapshot. Default: status." },
+                        "action": { "type": "string", "enum": ["status", "audit", "ratchet", "drift"], "description": "status (default, fast): 8-gate dashboard from cached reports. ratchet: per-gate detail (with top_gaps + age). audit: LIVE — runs cgm-invariant-audit script against code-graph indexes (~5s, use when refactoring types). drift: LIVE — runs audit and compares against previous snapshot." },
                         "layer": { "type": "string", "enum": ["wire", "harness", "settings"], "description": "Scope audit to one invariance layer (only for action=audit)." },
-                        "name": { "type": "string", "enum": ["sdk-types", "litellm-params", "proxy-models", "test-titles", "cursor-pins", "plumbing-integrity", "models-recon-anthropic"], "description": "Run one specific ratchet (only for action=ratchet). Omit for all seven." },
+                        "name": { "type": "string", "enum": ["sdk-types", "litellm-params", "proxy-models", "test-titles", "cursor-pins", "plumbing-integrity", "models-recon-anthropic"], "description": "Run one specific ratchet (only for action=ratchet). Omit for all seven. Use plumbing-integrity for Layer-4b/ctor/knob plumbing drift. Use models-recon-anthropic for litellm × apex × proxy reconciliation drift." },
                         "top": { "type": "number", "description": "Max gap entries to return per ratchet (default 5, only for action=ratchet)." },
                         "refresh": { "type": "boolean", "description": "Regenerate ratchet reports before reading (runs make ratchets, ~10s). Only for action=ratchet. Default: false." }
                     }
